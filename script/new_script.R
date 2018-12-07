@@ -37,7 +37,7 @@ write.csv(merged_df4,file="csv_file/final_complete_data_with_latlon.csv")
 #Create temp data frame
 merged_df <- merged_df4
 #based on wind direction
-merged_df$co2_mole_fraction[merged_df$wind_dir] <- NA
+merged_df$co2_mole_fraction[merged_df$wind_dir>90] <- NA
 merged_df$co2_mixing_ratio[merged_df$wind_dir> 90] <- NA
 merged_df$air_pressure[merged_df$wind_dir> 90] <- NA
 merged_df$x_90.[merged_df$wind_dir> 90] <- NA
@@ -314,3 +314,165 @@ distance = (x + y)^1/2
 df_group_month <- cbind(df_group_month, distance)
 
 write.csv(df_group_month, file="csv_file/group_month_V1.csv")
+
+b <- df_group_month
+d <- read.csv('by_monthly_group_data_hy.csv')
+b$chlor_a = b$ts
+b$chlor_a <- d$Chlorophyll
+
+#partial pressure of carbon dioxide in seawater(PCO2)(microatam) calculate using T and chlorophyll
+# PCO2 = 6.31 SST^2 + 61.9 chlor_a^2 - 365.85 SST - 94.41 chlor_a + 5715.94
+#SST in degree celcius
+#chlor_a in mg/m3
+SST <- b$sst
+chlor_a <- b$chlor_a
+PCO2 <- NA
+PCO2 = 6.31*(SST^2) + 61.9*(chlor_a^2) - 365.85*SST -94.41*chlor_a + 5715.94 
+b <- cbind(b, PCO2)
+
+#convert PP_air into micro atm
+PP_air_microatm <- NA
+PP_air_microatm = (b$PP_air / 101.325)*10^6
+b <- cbind(b, PP_air_microatm)
+
+#deltaP in microatm
+delta_p_p <- NA
+delta_p_p = b$PCO2 - b$PP_air_microatm
+b <- cbind(b, delta_p_p)
+
+#calculate k value (gas transfer velocity) with the bulk formula
+
+# Fco2 = kSdelta_p_p
+#Fco2 in μmol per m^2 per s
+#S = solubility of Carbon dioxide in water
+#   = 0.10615 mol per litre per atm
+# delta_p_p in μatm
+#k in m per second
+# S = 0.10615
+
+Fco2 <- b$co2_flux
+S = 0.10615
+delta_p_p <- b$delta_p_p
+k1<-NA
+k1 = (Fco2 / (S*delta_p_p))/1000  #convert L to m^3
+b <- cbind(b,k1)
+
+#input u*
+u <- read.csv('csv_file/u_data.csv')
+date <- as.POSIXct(u$daytime, format = "%d/%m/%Y %H:%M", tz = "Asia/Kuala_Lumpur")
+u <- cbind(date,u)
+u <- u[,-2]
+u$u.[u$wind_dir > 90] <- NA
+
+#group by month
+library(dplyr)
+s <- u
+df_grp_mean1 <-s %>%
+  mutate(time_stamp=as.POSIXct(date)) %>%
+  group_by(year=format(as.POSIXct(cut(time_stamp,breaks='year')),'%Y'),
+           month=format(as.POSIXct(cut(time_stamp,breaks='month')),'%m')) %>%
+  summarise(u.=mean(u., na.rm=TRUE))
+
+df_grp_sd1 <-s %>%
+  mutate(time_stamp= as.POSIXct(date)) %>%
+  group_by(year=format(as.POSIXct(cut(time_stamp,breaks='year')),'%Y'),
+           month=format(as.POSIXct(cut(time_stamp,breaks='month')),'%m')) %>%
+  summarise(u._sd =sd(u., na.rm=TRUE))
+
+#Merge the two dataframe
+df_group_month2 <-merge(df_grp_mean1,df_grp_sd1,by=c('year','month'))
+rm(df_grp_sd1,df_grp_mean1)
+write.csv(df_group_month2, file="csv_file/u._monthly.csv")
+
+#duplicate a data frame
+t <- df_group_month2
+#b is the monthly dataset
+b$u. <- NA
+b$u. <- t$u.
+b$u._sd <- NA
+b$u._sd <- t$u._sd
+
+#k value calculate using u.
+# k = 1/β * 1/(Sc^n) * u.
+#β =16 -11  #16 is high turbulence, 11 is low turbulence
+# n 0.67 -0.4   # 0.67 for smooth surface
+# Sc = μ /(ρD)
+# μ = dyanmic viscosity of fluid
+#ρ = density of fluid (kg/m^3)
+#D= mass diffusivity (m^2/s)
+μ = 1.08 *10^-3
+p = 1025 
+D = 1.92*10^-5
+Sc = (μ /(p*D))*100^2  # convert cm^2 to m^2
+n = 0.67
+β = 11
+u. = b$u.
+k = 1/β * 1/(Sc^n) * u.
+k2 <-NA
+k2 <- k
+b<- cbind(b,k2)
+
+#plot k1 vs k2
+plot(b$k2, b$k1, pch=16, col='darkblue',xlab= 'k2', ylab='k1')
+lk <- lm(b$k1 ~ b$k2)
+abline(lk,col='red', lwd=3)
+summary(lk)
+
+
+path_fig <- file.path('figs/k1_k2_u.jpg')
+jpeg(file=path_fig,width=20,height=16,res=400, units = 'cm')
+par(family='serif', mfrow = c(1,2),
+    mar = c(3.9, 3.9, 1, 1))
+plot(b$u., b$k2, pch=16, col='green',xlab= 'u.', ylab='k2')
+lk2temp <- b$lk2 * 100 * 3600
+lk2 <- lm(b$lk2 * 100 * 3600 ~ b$u.)
+abline(lk1,col='red', lwd=3)
+summary(lk1)
+
+plot(b$u., b$k1, pch=16, col='darkblue',xlab= 'u.', ylab='k1')
+lk1 <- lm((b$k1 * 100 * 3600) ~ b$u.)
+abline(lk1,col='red', lwd=3)
+summary(lk2)
+dev.off()
+
+
+path_fig <- file.path('figs/Test_k_year.jpg')
+jpeg(file=path_fig,width=24,height=12,res=400, units = 'cm')
+par(family='serif',
+    mar = c(3.9, 3.9, 1, 1))
+plot(b$u., (b$k2 * 100 * 3600), pch=16, col='red',xlab= 'u.', ylab='k2',ylim=c(-10.8,28.8))
+lk2 <- lm(b$k2 * 100 * 3600 ~ b$u.)
+abline(lk2,col='red',lwd = 3)
+points(d16$u.,(d16$k1* 100 * 3600), pch=16, col='darkblue',xlab= 'u.', ylab='k1')
+lk1 <- lm(b$k1 * 100 * 3600 ~ b$u.)
+abline(lk1,col='darkblue',lwd = 3)
+points(d17$u.,(d17$k1* 100 * 3600), pch=16, col='green',xlab= 'u.', ylab='k1')
+dev.off()
+
+plot(b$u., (b$k2 * 100 * 3600), pch=16, col='red',xlab= 'u.', ylab='k2',ylim=c(-10.8,28.8))
+lk2 <- lm(b$k2 * 100 * 3600 ~ b$u.)
+abline(lk2,col='red',lwd = 3)
+points(b$u.,(b$k1* 100 * 3600), pch=16, col='darkblue',xlab= 'u.', ylab='k1')
+lk1 <- lm(b$k1 * 100 * 3600 ~ b$u.)
+abline(lk1,col='darkblue',lwd = 3)
+
+lk1 <- lm(b$k2 ~ b$u.)
+abline(lk1,col='red', lwd=3)
+
+# lk3 <- lm(b$k1 ~  b$swh)
+# abline(lk3, col= 'red')
+# lk4 <- lm(b$k2 ~ b$swh)
+# abline (lk4, col ='black')
+
+path_fig <- file.path('figs/Test_k_swh_year.jpg')
+jpeg(file=path_fig,width=24,height=12,res=400, units = 'cm')
+par(family='serif',
+    mar = c(3.9, 3.9, 1, 1))
+plot(b$swh,(b$k2* 100 * 3600), pch=16, col='red',xlab= 'swh', ylab='k2',ylim=c(-10.8,28.8))
+points(d16$swh, (d16$k1* 100 * 3600),pch=16, col='darkblue',xlab= 'swh', ylab='k1')
+lk3 <- lm(b$k2 * 100 * 3600 ~ b$swh)
+abline(lk3,col='red',lwd = 3)
+lk4 <- lm(d16$k1 * 100 * 3600 ~ d16$swh)
+abline(lk4,col='blue',lwd = 3)
+points(d17$swh, (d17$k1* 100 * 3600),pch=16, col='green',xlab= 'swh', ylab='k1')
+dev.off()
