@@ -1,3 +1,4 @@
+##Significant Waves Height Data Extraction
 #Load library
 library(ncdf4)
 
@@ -67,13 +68,9 @@ time1 <- as.POSIXct(time1,origin="2000-01-01",tz="GMT")
 rm(time,nc)
 
 df <- data.frame(index1,lat1,lon1,time1,swh1,wind_speed_alt1)
-df8 <- df[which(df$index1 !=1000),]
+df1 <- df[which(df$index1 !=1000),]
 
 #Write in csv
-write.csv(df8,file="swhOD2016.csv")
+write.csv(df1,file="swhOD2016.csv")
 
-#Analysis
-rdate <- as.POSIXct(df4$time1, format="%Y-%m-%d %H:%M:%S")
-plot(rdate, df4$swh1)
-plot(df4$swh1~rdate,type='l',col='red',main="Time Series Plot of Significant Wave Height",ylab='swh',xlab='Time(Month)')
 
