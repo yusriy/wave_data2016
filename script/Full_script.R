@@ -1,18 +1,24 @@
-###################################################################
+#-----------------------------------------------------------------------#
+#
 # Title: Import and Process Muka Head, Wave and Precipitation Data 
 # Author: Chean Wan Ting, Yusri Yusup
 # Affiliation: Environmental Technology, School of Industrial Technology
 # Universiti Sains Malaysia
+# Datasets used:
+#   1. CEMACS (Data in Brief paper doi)
+#   2. EUMETSAT (web address)
+#   3. Weather Underground (web address)
 # Dataset period: 2015-11 to 2017-10 (2 years)
 # No. of rows: 
 # No. of columns:
-# 
 # Objective: To combine EC data from Muka Head with Significant 
 # Wave Height (swh) data from EUMETSAT, and precipitation data 
 # from Wunderground.
 #
-#
-###################################################################
+#-----------------------------------------------------------------------#
+
+#### Load libraries ####
+require(openair)
 
 #### 1. Import data ####
 muka<-read.csv('csv_file/Finalise_Muka_Head_Data.csv')
@@ -35,47 +41,46 @@ wave <- wave[,-5]
 date <- as.POSIXct(rain$Time, format = "%Y-%m-%d %H:%M:%S", tz= "Asia/Kuala_Lumpur")
 rain <-cbind(date,rain)
 rain <-rain[,-2]
+rm(date)
 
-
-#### Filter Data ####
-#Remove unwanted column
-#Wave Data
+#### 3. Filter Data ####
+# Remove unwanted columns
+## Wave Data
 wave <- wave[,-2]
 
-#Precipitation Data
+## Rain Data
 rain <- rain[,-c(2,3,4,5,6,7,8,9,10,12,13,15,16,17)]
 
-#Muka Head Data
-#Remove problematic value in wind speed
-plot(muka$wind_speed)
-muka$wind_speed[muka$wind_speed >5]<-NA
-plot(muka$wind_speed)
+## Muka Head Data
+# Remove problematic value in wind speed i.e., U > 5 m s-1
+# plot(muka$wind_speed)
+muka$wind_speed[muka$wind_speed > 5] <- NA
+# plot(muka$wind_speed)
 
-#Remove problematic value in sea surface temperature (TS)
-plot(muka$TS)
-muka$TS[muka$TS >33]<-NA
-muka$TS[muka$TS <29]<-NA
-plot(muka$TS)
+# Remove problematic value in sea surface temperature (TS)
+# i.e., 29 < TS < 33
+#plot(muka$TS)
+muka$TS[muka$TS > 33 | muka$TS < 29] <- NA
+#plot(muka$TS)
  
 
-#### Convert angle to radian ####
-#Add column to datasheet
-muka$dir_90 = muka$wind_dir
-muka$dir_90[muka$dir_90 > 90 ]<- NA ## only want the wind dir from 0 to 90 degree
-muka$radian_wd = muka$dir_90 
-muka$radian_wd <- (muka$dir_90*pi)/180
+#### 4. Convert angle to radian ####
+# Add wind_dir column to datasheet
+muka$dir_90 <- muka$wind_dir
+muka$dir_90[muka$dir_90 > 90 ] <- NA # only retain the wind_dir from 0 to 90 deg
+muka$radian_wd <- muka$dir_90 
+muka$radian_wd <- (muka$dir_90 * pi)/180
 
-#### Merge Muka Head, Wave, Precipitation Data ####
-library(openair)
+#### 5. Merge Muka Head, Wave, Rain Data ####
 temp <- timeAverage(wave, avg.time = "30 min", start.date = "2015-11-03 11:09:00", interval = "30 min")
 temp2 <- timeAverage(rain, avg.time = "30 min", start.date = "2015-11-12 00:13:00", interval = "30 min")
 merged_df <- merge(muka, temp, by = c("date","date"))
 merged_df <-merge(merged_df,temp2, by =c("date", "date"))
 rm(muka,wave,rain,temp,temp2)
 
-#### Quality Control ####
-#Remove qc=2, wind direction > 90, precipitation >0
-#Create temp data frame
+#### 6. Quality Control ####
+# Remove qc = 2, wind_dir > 90, rain > 0
+# Create temp data frame
 m2<- merged_df
 
 #Remove qc=2, wind direction > 90, rain >0
