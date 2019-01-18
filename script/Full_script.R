@@ -1,22 +1,37 @@
-#### open Muka Head, Wave and Precipitation Data ####
+###################################################################
+# Title: Import and Process Muka Head, Wave and Precipitation Data 
+# Author: Chean Wan Ting, Yusri Yusup
+# Affiliation: Environmental Technology, School of Industrial Technology
+# Universiti Sains Malaysia
+# Dataset period: 2015-11 to 2017-10 (2 years)
+# No. of rows: 
+# No. of columns:
+# 
+# Objective: To combine EC data from Muka Head with Significant 
+# Wave Height (swh) data from EUMETSAT, and precipitation data 
+# from Wunderground.
+#
+#
+###################################################################
 
+#### 1. Import data ####
 muka<-read.csv('csv_file/Finalise_Muka_Head_Data.csv')
 wave <-read.csv('csv_file/DWave.csv')
 rain <-read.csv('csv_file/IPENANGP2_2017-10-12_143327.csv')
 
-#### change the time using POSIXct ####
-#Muka Head Data (muka)
+#### 2. Change the time using POSIXct ####
+# Muka Head EC Data (muka)
 date <- as.POSIXct(muka$daytime, format = "%d/%m/%Y %H:%M", tz = "Asia/Kuala_Lumpur")
 muka <- cbind(date,muka)
 muka <- muka[,-2]
 
-#Wave Data(wave)
+# Wave Data (wave)
 date <- as.POSIXct(wave$time1, format = "%d/%m/%Y %H:%M", tz = "GMT")
 date <- as.POSIXct(wave$time1, format = "%d/%m/%Y %H:%M", tz = "Asia/Kuala_Lumpur")
 wave <- cbind(date,wave)
 wave <- wave[,-5]
 
-#Rain Data(rain)
+# Rain Data (rain)
 date <- as.POSIXct(rain$Time, format = "%Y-%m-%d %H:%M:%S", tz= "Asia/Kuala_Lumpur")
 rain <-cbind(date,rain)
 rain <-rain[,-2]
